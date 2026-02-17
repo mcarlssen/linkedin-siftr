@@ -1,0 +1,7 @@
+config.yaml
+/out
+resume-feb-2026.md
+.venv
+/scripts/debug_job_card_text.py
+/scripts/remove_company_blocked_exact.py
+/siftr/__pycache__/

@@ -1,0 +1,2 @@
+"""siftr — LinkedIn job sifter."""
+

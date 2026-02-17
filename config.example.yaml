@@ -1,0 +1,171 @@
+run:
+  # LinkedIn Top Applicant collection URL
+  top_applicant_url: "https://www.linkedin.com/jobs/collections/top-applicant"
+  recommended_url: "https://www.linkedin.com/jobs/collections/recommended"
+
+  # Output directory (relative to project root)
+  out_dir: "out"
+
+  # How many jobs to evaluate with AI per run (after prefilters)
+  max_ai_evals_per_run: 200
+
+scrape:
+  # Soft cap to avoid infinite scroll loops / huge runs
+  max_jobs: 800
+
+  # Persist job IDs across runs and skip re-scanning recently scanned jobs.
+  # This massively reduces repeat scraping on scheduled runs.
+  seen_cache:
+    enabled: true
+    # If you leave this as default, the cache is written under run.out_dir:
+    #   <out_dir>/cache/seen_jobs.json
+    path: "out/cache/seen_jobs.json"
+    # Skip opening/clicking jobs that were fully scanned within this window.
+    skip_if_scanned_within_days: 14  
+
+  browser:
+    # Store a persistent browser profile here so you can login once.
+    user_data_dir: "out/profiles/chromium"
+
+    # Default is headless unless --login is used.
+    headless: true
+
+    # Slow down a bit to reduce flags/rate limiting.
+    slow_mo_ms: 75
+
+  rate_limit:
+    # Conservative pacing. Increase if you get blocked.
+    min_delay_seconds: 1.0
+    max_delay_seconds: 3.0
+
+filters:
+  # Skip roles you've already applied to (detected via LinkedIn "Applied" / "See application")
+  skip_already_applied: true
+  # Optional: skip postings older than N days (approximate; uses LinkedIn "X days/weeks/months ago")
+  max_age_days: 7
+  # If max_age_days is set and the posting age can't be scraped:
+  allow_missing_date_posted: true
+
+
+  remote_only: true
+  usa_only: false
+
+  compensation:
+    # If salary missing, do NOT reject. (You said: evaluate on other criteria.)
+    allow_missing: true
+    # If present, require >= threshold.
+    min_annual_usd: 75000
+    min_hourly_usd: 38
+
+  company_blocklist:
+    exact:
+      - "Robert Half"
+      - "TEKsystems"
+      - "Lensa"
+      - "RemoteHunter"
+      - "GE HealthCare"
+      - "Rippling"
+      - "HireCrap"
+      - "Swooped"
+      - "Jobgether"
+      - "Hirenza"
+      - "Jobs via Dice"
+    regex:
+      - "(?i)staffing"
+      - "(?i)recruit(ing|er)"
+
+  # Config-driven skip logic (“combinations”)
+  # A rule matches when ALL conditions match. Matching => action is applied.
+  # Supported fields:
+  # - title, company, location_text, description
+  # - is_remote (true/false/unknown)
+  # - comp_min_annual_usd, comp_max_annual_usd
+  # - comp_min_hourly_usd, comp_max_hourly_usd
+  # Supported ops:
+  # - contains, regex, equals, in
+  # - gte, gt, lte, lt
+  # - is_true, is_false, is_unknown
+  skip_rules:
+    - id: "skip.solutions_engineer.high_floor"
+      when:
+        - field: title
+          op: regex
+          value: "(?i)\\bsolutions\\s+engineer\\b"
+        - field: comp_min_annual_usd
+          op: gte
+          value: 100000
+      action: "skip"
+      reason: "Solutions Engineer roles with high comp floor tend to be a bad fit."
+
+  skip_rules:
+    - id: "skip.software_engineer"
+      when:
+        - field: title
+          op: regex
+          value: "(?i)\\bsoftware\\s+engineer\\b"
+      action: "skip"
+      reason: "You can't write code..."
+
+  skip_rules:
+    - id: "skip.skills.kubernetes"
+      when:
+        - field: description
+          op: regex
+          value: "(?i)\\bkubernetes\\b"
+      action: "skip"
+      reason: "No k8 skillz, silly."
+
+  skip_rules:
+    - id: "skip.skills.top_secret_clearance"
+      when:
+        - field: description
+          op: regex
+          value: "(?i)\\btop\\s+secret\\b"
+      action: "skip"
+      reason: "Not eligible for Top Secret clearance."
+
+  skip_rules:
+    - id: "skip.skills.public_trust_clearance"
+      when:
+        - field: description
+          op: regex
+          value: "(?i)\\bpublic\\s+trust\\b"
+      action: "skip"
+      reason: "Not eligible for Public Trust clearance."
+
+ai:
+  provider: "anthropic"
+  model: "claude-haiku-4-5"
+  max_tokens: 3000
+  temperature: 0.2
+
+  # Resume baseline required by your evaluator.
+  resume_path: "resume-feb-2026.md"
+
+export:
+  #xlsx_path: "out/jobs.xlsx"
+  csv_path: "out/jobs.csv"
+
+  # Optional: datestamp output files so they don't overwrite each run.
+  # - If true, inserts ".<stamp>" before the extension (e.g. jobs.20260207-153012.csv)
+  # - Or use "{stamp}" in your path for full control (e.g. out/jobs_{stamp}.csv)
+  datestamp: true
+  datestamp_format: "%Y%m%d-%H%M%S"
+
+notifications:
+  # Send an email only when the run produces NEW AI evaluations (not cache hits).
+  enabled: true
+  provider: "resend"
+
+  # Recommended: set via environment variable RESEND_API_KEY instead of in config.
+  # resend_api_key: "re_..."
+  resend_api_key: "apikey_here"
+
+  # Resend "from" must be a verified sender/domain in your Resend account.
+  from_email: "newjobs@acme.com"
+
+  # Either a list or a single string is accepted.
+  to_emails:
+    - "jobhunter@acme.com"
+
+  subject: "new AI results"
