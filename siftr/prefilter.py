@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import re
-from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
 
 from siftr.config import FiltersConfig, SkipRule
 from siftr.models import JobPost
-from siftr.util import parse_linkedin_relative_time, strip_location_from_company
+from siftr.util import parse_linkedin_relative_time
 
 
 US_MARKERS = [
@@ -241,15 +240,15 @@ def apply_prefilters(job: JobPost, cfg: FiltersConfig) -> tuple[bool, list[str]]
             if age_days > float(max_age):
                 return False, [f"reject.posted_too_old.{int(max_age)}d"]
 
-    # company blocklist (normalize to strip trailing location, e.g. "Jobgether United States (" -> "Jobgether")
+    # company blocklist (substring match for exact, regex for patterns)
     company_raw = (job.company or "").strip()
-    company = strip_location_from_company(company_raw) if company_raw else ""
-    exact_lower = {c.strip().lower() for c in (cfg.company_blocklist.exact or []) if str(c).strip()}
-    if company and company.strip().lower() in exact_lower:
-        return False, ["reject.company_blocked.exact"]
+    for bl in (cfg.company_blocklist.exact or []):
+        s = str(bl).strip()
+        if s and s.lower() in (company_raw or "").lower():
+            return False, ["reject.company_blocked.exact"]
     for pat in cfg.company_blocklist.regex:
         try:
-            if re.search(pat, company or ""):
+            if re.search(pat, company_raw or ""):
                 return False, ["reject.company_blocked.regex"]
         except re.error:
             # ignore malformed regex patterns

@@ -67,7 +67,7 @@ def _build_prompt(*, resume_text: str, job: JobPost) -> str:
 
         ADDITIONAL CRITERIA (SPECIFIC TO MIKE THORN):
         - Ignore requirements for 'Bachelor's degree' if the job description includes "or equivalent experience" or similar. Higher-level degrees should be considered a hard blocker.
-        - Jobs which require a commute are a hard 'no.' Make exceptions for "occasional travel" or "visits" to offices or offsites, but not weekly commutes. 
+        - Jobs which require a commute are a hard 'no.' Make exceptions for "occasional travel" or "visits" to offices or offsites, but not weekly commutes. Travel requirements over 10% are a hard 'no.'
         - Jobs requring 'Public Trust' or 'Secret'/'Top Secret' clearance are a no-go.
         - If a job requires hardcore "startup" or "bootstrapped" or "scaleup" experience, it should be a 'no'. Note this clearly in the kill_criteria section.
         - Jobs with a hard requirement (or very strong focus on) DICOM, HL7/FHIR, or HL7v2 should be a 'no'. Note this clearly in the kill_criteria section.

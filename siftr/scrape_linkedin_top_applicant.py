@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
@@ -720,6 +719,30 @@ def _extract_company_from_description(canvas_text: str) -> str | None:
     return None
 
 
+def _build_company_canvas_text(*, page, top) -> str:
+    canvas_parts: list[str] = []
+    canvas_parts.append(top.inner_text(timeout=2_000))
+    desc_loc = page.locator(
+        "div.jobs-description__content, div.jobs-description-content__text, div.jobs-box__html-content"
+    ).first
+    if desc_loc.count():
+        canvas_parts.append(desc_loc.inner_text(timeout=3_000))
+    return normalize_whitespace(" ".join(canvas_parts))
+
+
+def _location_fallback_from_description_or_body(*, page, location_text: str | None, description: str) -> str | None:
+    loc = location_text
+    if not loc and description:
+        loc = _extract_location_from_page_text(description)
+    if not loc:
+        try:
+            body_text = normalize_whitespace(page.locator("body").inner_text(timeout=2_000))
+            loc = _extract_location_from_page_text(body_text or "")
+        except Exception:
+            pass
+    return loc
+
+
 def _extract_company_from_list_card(*, card, title: str) -> str | None:
     """
     Extract company name from the left-side list card (before or after clicking).
@@ -1208,14 +1231,7 @@ def scrape_top_applicant(
                     # Fallback 4: first 100 words of job canvas (top card + description)
                     # Scoped to avoid false positives from "Similar jobs" further down the page.
                     try:
-                        canvas_parts: list[str] = []
-                        canvas_parts.append(top.inner_text(timeout=2_000))
-                        desc_loc = page.locator(
-                            "div.jobs-description__content, div.jobs-description-content__text, div.jobs-box__html-content"
-                        ).first
-                        if desc_loc.count():
-                            canvas_parts.append(desc_loc.inner_text(timeout=3_000))
-                        canvas_text = normalize_whitespace(" ".join(canvas_parts))
+                        canvas_text = _build_company_canvas_text(page=page, top=top)
                         blocklist = getattr(cfg.filters.company_blocklist, "exact", None) or []
                         extracted = _extract_company_from_canvas_first_100_words(canvas_text, blocklist)
                         if extracted:
@@ -1225,14 +1241,7 @@ def scrape_top_applicant(
                 if company == "N/A":
                     # Fallback 5: parse description intro ("About Company –", "Company is hiring")
                     try:
-                        canvas_parts_5: list[str] = []
-                        canvas_parts_5.append(top.inner_text(timeout=2_000))
-                        desc_loc_5 = page.locator(
-                            "div.jobs-description__content, div.jobs-description-content__text, div.jobs-box__html-content"
-                        ).first
-                        if desc_loc_5.count():
-                            canvas_parts_5.append(desc_loc_5.inner_text(timeout=3_000))
-                        canvas_text_5 = normalize_whitespace(" ".join(canvas_parts_5))
+                        canvas_text_5 = _build_company_canvas_text(page=page, top=top)
                         extracted = _extract_company_from_description(canvas_text_5)
                         if extracted:
                             company = extracted
@@ -1308,14 +1317,11 @@ def scrape_top_applicant(
                         bad.decompose()
                     description = soup.get_text(" ", strip=True)
 
-                if not location_text and description:
-                    location_text = _extract_location_from_page_text(description)
-                if not location_text:
-                    try:
-                        body_text = normalize_whitespace(page.locator("body").inner_text(timeout=2_000))
-                        location_text = _extract_location_from_page_text(body_text or "")
-                    except Exception:
-                        pass
+                location_text = _location_fallback_from_description_or_body(
+                    page=page,
+                    location_text=location_text,
+                    description=description,
+                )
 
                 comp = _extract_compensation(page=page, description=description)
 
@@ -1617,14 +1623,7 @@ def scrape_job_url(
         if company == "N/A":
             # Fallback 4: first 100 words of job canvas (top card + description)
             try:
-                canvas_parts = []
-                canvas_parts.append(top.inner_text(timeout=2_000))
-                desc_loc = page.locator(
-                    "div.jobs-description__content, div.jobs-description-content__text, div.jobs-box__html-content"
-                ).first
-                if desc_loc.count():
-                    canvas_parts.append(desc_loc.inner_text(timeout=3_000))
-                canvas_text = normalize_whitespace(" ".join(canvas_parts))
+                canvas_text = _build_company_canvas_text(page=page, top=top)
                 blocklist = getattr(cfg.filters.company_blocklist, "exact", None) or []
                 extracted = _extract_company_from_canvas_first_100_words(canvas_text, blocklist)
                 if extracted:
@@ -1634,14 +1633,7 @@ def scrape_job_url(
         if company == "N/A":
             # Fallback 5: parse description intro ("About Company –", "Company is hiring")
             try:
-                canvas_parts_5 = []
-                canvas_parts_5.append(top.inner_text(timeout=2_000))
-                desc_loc_5 = page.locator(
-                    "div.jobs-description__content, div.jobs-description-content__text, div.jobs-box__html-content"
-                ).first
-                if desc_loc_5.count():
-                    canvas_parts_5.append(desc_loc_5.inner_text(timeout=3_000))
-                canvas_text_5 = normalize_whitespace(" ".join(canvas_parts_5))
+                canvas_text_5 = _build_company_canvas_text(page=page, top=top)
                 extracted = _extract_company_from_description(canvas_text_5)
                 if extracted:
                     company = extracted
@@ -1716,14 +1708,11 @@ def scrape_job_url(
                 bad.decompose()
             description = soup.get_text(" ", strip=True)
 
-        if not location_text and description:
-            location_text = _extract_location_from_page_text(description)
-        if not location_text:
-            try:
-                body_text = normalize_whitespace(page.locator("body").inner_text(timeout=2_000))
-                location_text = _extract_location_from_page_text(body_text or "")
-            except Exception:
-                pass
+        location_text = _location_fallback_from_description_or_body(
+            page=page,
+            location_text=location_text,
+            description=description,
+        )
 
         comp = _extract_compensation(page=page, description=description)
 

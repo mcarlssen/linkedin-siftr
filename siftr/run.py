@@ -62,10 +62,13 @@ def _parse_collections_arg(values: list[str]) -> list[str]:
             p = part.strip()
             if p:
                 names.append(p)
-    # de-dupe preserve order
+    return _dedupe_preserve_order(names)
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
-    for n in names:
+    for n in items:
         if n not in seen:
             seen.add(n)
             out.append(n)
@@ -90,13 +93,7 @@ def _choose_collections_interactive(options: list[str]) -> list[str]:
             continue
         if 1 <= idx <= len(options):
             picks.append(options[idx - 1])
-    # de-dupe preserve order
-    out: list[str] = []
-    seen: set[str] = set()
-    for n in picks:
-        if n not in seen:
-            seen.add(n)
-            out.append(n)
+    out = _dedupe_preserve_order(picks)
     return out or options
 
 
@@ -463,9 +460,7 @@ def main() -> int:
                 new_ai_ids.append(r["job_id"])
         except Exception:
             continue
-    # de-dupe preserve order
-    seen_new: set[str] = set()
-    new_ai_ids = [x for x in new_ai_ids if not (x in seen_new or seen_new.add(x))]
+    new_ai_ids = _dedupe_preserve_order(new_ai_ids)
 
     run_meta = {
         "run_at_utc": run_dt_utc.isoformat(),
